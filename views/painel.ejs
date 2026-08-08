@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'media' }</script>
+  <title>Xitike Célia — Painel</title>
+</head>
+<body class="bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 min-h-screen transition-colors duration-500">
+
+  <main class="max-w-5xl mx-auto p-6 md:py-12">
+    <header class="mb-10 flex items-center justify-between flex-wrap gap-4">
+      <div class="flex items-center gap-4">
+        <div class="relative">
+          <button type="button" onclick="document.getElementById('menuLogo').classList.toggle('hidden')"
+                  title="Ver ou trocar a foto" class="block w-14 h-14">
+            <div class="w-14 h-14 rounded-full bg-zinc-800 border-2 border-pink-500 flex items-center justify-center text-sm font-black text-pink-500 overflow-hidden hover:opacity-75 transition-opacity">
+              <span id="logoIniciais">XC</span>
+              <img src="/logo" alt="Logo" style="display:none" id="logoImg"
+                   onload="document.getElementById('logoIniciais').style.display='none'; this.style.display='block';"
+                   onerror="this.style.display='none'"
+                   class="w-14 h-14 rounded-full object-cover absolute inset-0">
+            </div>
+          </button>
+          <div id="menuLogo" class="hidden absolute left-0 top-16 z-10 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl overflow-hidden text-sm font-bold w-36">
+            <button type="button"
+                    onclick="if(document.getElementById('logoImg').style.display==='block'){window.open('/logo','_blank')}; document.getElementById('menuLogo').classList.add('hidden')"
+                    class="block w-full text-left px-4 py-2.5 hover:bg-zinc-800 text-whit">Ver foto</button>
+            <button type="button"
+                    onclick="document.getElementById('inputLogo').click(); document.getElementById('menuLogo').classList.add('hidden')"
+                    class="block w-full text-left px-4 py-2.5 hover:bg-zinc-800 text-pink-500">Trocar foto</button>
+          </div>
+          <form method="POST" action="/admin/logo" enctype="multipart/form-data" id="formLogo">
+            <input type="file" id="inputLogo" name="logo" accept="image/png,image/jpeg,image/webp"
+                   class="hidden" onchange="this.form.submit()">
+          </form>
+        </div>
+        <div>
+          <h1 class="text-3xl font-black">Xitike <span class="text-pink-600"> Célia</span></h1>
+          <p class="text-zinc-500">Gestão dos Grupos e dos Valores.</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 bg-zinc-900 px-4 py-2 rounded-full border border-zinc-800">
+          <div class="w-2.5 h-2.5 rounded-full <%= botOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500' %>"></div>
+          <span class="text-xs font-bold uppercase tracking-wider text-zinc-400">
+            <%= botOnline ? 'Bot Online' : 'Bot Offline' %>
+          </span>
+        </div>
+        <form method="POST" action="/logout">
+          <button type="submit" class="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-pink-500 transition-colors">Sair</button>
+        </form>
+      </div>
+    </header>
+
+    <% if (painelGrupos.length === 0) { %>
+      <p class="text-zinc-500">Nenhum xitique criado ainda. Usa <code>!novo Nome Valor Dias</code> num grupo do WhatsApp.</p>
+    <% } %>
+
+    <% painelGrupos.forEach(grupo => { %>
+      <div class="mb-10 p-8 border-2 border-pink-500 rounded-3xl bg-white dark:bg-zinc-900 shadow-xl shadow-pink-500/5">
+
+        <div class="mb-8 border-b border-zinc-200 dark:border-zinc-800 pb-6">
+          <h2 class="text-2xl font-black text-pink-600"><%= grupo.nome_grupo %></h2>
+          <p class="text-sm font-medium mt-1">Valor diário: <span class="text-pink-500"><%= grupo.valor_diario %> MT</span></p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div class="p-6 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+            <p class="text-xs font-bold text-zinc-400 uppercase">Total Acumulado:</p>
+            <p class="text-3xl font-black text-pink-600 mt-2"><%= (grupo.totalFaturado || 0).toLocaleString() %> <span class="text-sm">MT</span></p>
+          </div>
+          <div class="p-6 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+            <p class="text-xs font-bold text-zinc-400 uppercase">Meta do Grupo:</p>
+            <p class="text-3xl font-black mt-2"><%= (grupo.metaTotal || 0).toLocaleString() %> <span class="text-sm">MT</span></p>
+          </div>
+          <div class="p-6 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+            <p class="text-xs font-bold text-zinc-400 uppercase">Membros:</p>
+            <p class="text-3xl font-black mt-2"><%= grupo.membrosAtivos %></p>
+          </div>
+        </div>
+
+        <p class="text-xs font-bold text-zinc-400 uppercase mb-4">Rodada atual: <%= grupo.rodada_atual %></p>
+
+        <div class="mb-8 p-6 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+          <h4 class="text-xs font-black text-zinc-400 uppercase tracking-widest mb-2">Números da Célia</h4>
+          <p class="text-xs text-zinc-500 mb-3"> Não editável por aqui!</p>
+          <% if (numerosRecebimentoCelia.length === 0) { %>
+            <p class="text-sm text-amber-500 font-bold">Nenhum número configurado — checagem de destino errado/editado está desligada.</p>
+          <% } else { %>
+            <div class="flex flex-wrap gap-2">
+              <% numerosRecebimentoCelia.forEach(numero => { %>
+                <span class="bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full text-sm font-bold"><%= numero %></span>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <h4 class="text-xs font-black text-zinc-400 uppercase tracking-widest mb-4">Situação dos Membros</h4>
+        <div class="space-y-3">
+          <% grupo.membros.forEach(membro => { %>
+            <div class="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800 rounded-xl">
+              <span class="font-bold"><%= membro.ordem ? `${membro.ordem}. ` : '' %><%= membro.nome %></span>
+              <% if (membro.divida > 0) { %>
+                <span class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-red-500 text-white">Deve <%= membro.divida.toFixed(2) %> MT</span>
+              <% } else if (membro.credito > 0) { %>
+                <span class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white">Crédito <%= membro.credito.toFixed(2) %> MT</span>
+              <% } else { %>
+                <span class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-pink-500 text-white">Em dia</span>
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% }) %>
+  </main>
+</body>
+</html>

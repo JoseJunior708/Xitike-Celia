@@ -1,15 +1,7 @@
 # Xitike Célia
 
-Bot de WhatsApp para gestão de xitiques de Cabelos e Iphone, com
+Bot de WhatsApp para gestão, validação de valores dos xitiques de Cabelos e Iphone, com
 confirmação automática de pagamentos M-Pesa/e-Mola e painel web.
-
-# Instalação
-
-npm install
-node init_db.js
-node index.js
-
-
 
 ## Comandos do bot (dentro do grupo de WhatsApp)
 

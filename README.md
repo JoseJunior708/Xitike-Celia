@@ -6,13 +6,13 @@ confirmação automática de pagamentos M-Pesa/e-Mola e painel web.
 ## Comandos do bot (dentro do grupo de WhatsApp)
 
 - `!novo Nome Valor DiasAteReceber` — cria um xitique novo (só a Célia)
-- `!ordem 84XXXXXXX 3` — define a posição de um membro na fila de recebimento (só a Célia)
+- `!ordem 840000000 3` — define a posição de um membro na fila de recebimento (só a Célia)
 - `!fila` — mostra a ordem de quem recebe o pote
-- `!recebeu 84XXXXXXX` — marca que alguém recebeu o pote e avança a rodada (só a Célia)
-- `!cadastrar 84XXXXXXX Nome Completo` — regista um membro que ainda não escreveu no grupo (só a Célia)
+- `!recebeu 870000000` — marca que alguém recebeu o pote e avança a rodada (só a Célia)
+- `!cadastrar 840000000 Nome Completo` — regista um membro que ainda não escreveu no grupo (só a Célia)
 - `!pagos` (seguido de uma linha `numero Nome valor` por membro) — importa em massa quem já pagou, pra grupos que já estavam a decorrer antes do bot (só a Célia)
-- `!atribuir IDTransacao 84XXXXXXX` — liga manualmente um pagamento pendente a um membro (só a Célia)
-- `!banir 84XXXXXXX` — remove um membro do grupo (só a Célia)
+- `!atribuir IDTransacao 840000000` — liga manualmente um pagamento pendente a um membro (só a Célia)
+- `!banir 870000000` — remove um membro do grupo (só a Célia)
 - `!pendentes` — lista pagamentos que ainda precisam de atribuição manual
 - `!resumo` — mostra a situação de cada membro (em dia / dívida / crédito)
 - `!ajuda` — mostra esta lista dentro do WhatsApp
@@ -38,6 +38,3 @@ Como deve funcionar na prática:
   completa o pagamento nesse instante. Se não, fica guardada à espera de
   alguém postar.
 - `!pendentes` (admin) mostra os dois tipos de pendência.
-
-Sem o `WEBHOOK_TOKEN` configurado, o bot volta ao modo antigo (só checa se o
-destino bate com os números oficiais).

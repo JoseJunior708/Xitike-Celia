@@ -12,7 +12,7 @@
     <header class="mb-10 flex items-center justify-between flex-wrap gap-4">
       <div>
         <h1 class="text-3xl font-black">Pagamentos</h1>
-        <p class="text-zinc-500">Histórico e pendências — sem depender de nenhuma API do M-Pesa/e-Mola.</p>
+        <p class="text-zinc-500">Histórico e pendências</p>
       </div>
       <a href="/admin" class="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-pink-500 transition-colors">← Voltar ao painel</a>
     </header>
@@ -47,7 +47,7 @@
 
     <% if (aguardandoAtribuicao.length > 0) { %>
       <div class="mb-8 p-6 border-2 border-red-500 rounded-3xl bg-white dark:bg-zinc-900">
-        <h2 class="text-sm font-black uppercase tracking-widest text-red-500 mb-4">Precisam de atribuição manual — !atribuir (<%= aguardandoAtribuicao.length %>)</h2>
+        <h2 class="text-sm font-black uppercase tracking-widest text-red-500 mb-4">Precisam de atribuição manual. !atribuir (<%= aguardandoAtribuicao.length %>)</h2>
         <div class="space-y-2">
           <% aguardandoAtribuicao.forEach(p => { %>
             <div class="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl text-sm">

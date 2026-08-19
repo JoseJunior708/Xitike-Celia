@@ -544,7 +544,7 @@ async function tratarMensagem(sock, db, msg) {
     [confirmacao.id_transacao, idConversa, remetente, confirmacao.valor, texto]
   );
 
-  // --- "Recebeste" postado por um MEMBRO comum 
+  // "Recebeste" postado por um MEMBRO comum 
   // Interpretamos isto como prova de ter recebido
  //só conta se o dinheiro veio de um número conhecido do Admin.
   if (confirmacao.tipo === 'recebido' && !ehAdmin) {
@@ -564,7 +564,7 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // --- Cliente auto-reportando ("Transferiste ... para <destino>") ---
+  // Cliente auto-reportando ("Transferiste ... para <destino>") 
   if (confirmacao.tipo === 'enviado') {
     const webhookAtivo = !!process.env.WEBHOOK_TOKEN;
 
@@ -701,18 +701,6 @@ export async function iniciarWhatsApp() {
   await conectar();
 }
 
-/**
- * Processa uma SMS de "Recebeste" vinda diretamente do telemóvel da Célia
- * (via Atalhos do iPhone → webhook). Isto NUNCA escolhe o grupo/membro
- * sozinho por nome — quem diz o grupo certo é sempre o cliente, ao colar a
- * confirmação lá dentro (uma pessoa pode estar em vários xitiques ao mesmo
- * tempo, então adivinhar pelo nome não é seguro).
- *
- * Em vez disso, esta função só guarda a SMS real e cruza pelo ID da
- * transação: se um cliente já tinha colado a confirmação num grupo e
- * estava à espera, completa o pagamento agora. Se ainda não postou, fica
- * guardada à espera de alguém colar.
- */
 export async function processarSmsExterna(texto) {
   const db = await getDb();
 

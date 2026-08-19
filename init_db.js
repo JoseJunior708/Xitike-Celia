@@ -13,7 +13,8 @@ async function inicializarBaseDados() {
       nome_grupo TEXT NOT NULL,
       valor_diario REAL NOT NULL,
       dias_ciclo INTEGER NOT NULL,
-      rodada_atual INTEGER DEFAULT 1
+      rodada_atual INTEGER DEFAULT 1,
+      codigo TEXT UNIQUE
     )
   `);
 
@@ -44,8 +45,6 @@ async function inicializarBaseDados() {
       criado_em TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  // SMS reais que chegaram no telemóvel da Célia via Atalho do iPhone.
-  // Fica à espera de um cliente postar a confirmação correspondente num grupo.
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS reivindicacoes_pendentes (
@@ -58,8 +57,30 @@ async function inicializarBaseDados() {
       FOREIGN KEY (id_grupo) REFERENCES grupos(id_grupo)
     )
   `);
-  // Cliente postou confirmação num grupo, mas a SMS real ainda não
-  // chegou (ou nunca chega, se for falsa). Fica aqui até bater com sms_celia.
+
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS membros_bloqueados (
+      id_whatsapp TEXT NOT NULL,
+      id_grupo TEXT NOT NULL,
+      nome TEXT,
+      motivo TEXT,
+      criado_em TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id_whatsapp, id_grupo),
+      FOREIGN KEY (id_grupo) REFERENCES grupos(id_grupo)
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS mensagens_nao_reconhecidas (
+      id_grupo TEXT NOT NULL,
+      remetente TEXT,
+      nome_contato TEXT,
+      texto TEXT,
+      criado_em TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (id_grupo) REFERENCES grupos(id_grupo)
+    )
+  `);
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS pagamentos_pendentes (
@@ -73,8 +94,6 @@ async function inicializarBaseDados() {
       FOREIGN KEY (id_grupo) REFERENCES grupos(id_grupo)
     )
   `);
-  // Caso à parte: quando a própria Célia posta um "Recebeste" e o nome não
-  // bate com nenhum membro (ou bate com mais de um). Resolve com !atribuir.
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS sms_recebidos (
@@ -89,6 +108,7 @@ async function inicializarBaseDados() {
       status TEXT DEFAULT 'CONFIRMADO'
     )
   `);
+  // Registo de auditoria de toda confirmação processada (evita duplicados).
 
   console.log("Base de dados do Xitike criada/atualizada com sucesso!");
   await db.close();

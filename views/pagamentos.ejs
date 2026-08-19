@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'media' }</script>
+  <title>Xitike Célia — Pagamentos</title>
+</head>
+<body class="bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 min-h-screen transition-colors duration-500">
+
+  <main class="max-w-5xl mx-auto p-6 md:py-12">
+    <header class="mb-10 flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <h1 class="text-3xl font-black">Pagamentos</h1>
+        <p class="text-zinc-500">Histórico e pendências — sem depender de nenhuma API do M-Pesa/e-Mola.</p>
+      </div>
+      <a href="/admin" class="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-pink-500 transition-colors">← Voltar ao painel</a>
+    </header>
+
+    <% if (aguardandoSms.length > 0) { %>
+      <div class="mb-8 p-6 border-2 border-amber-500 rounded-3xl bg-white dark:bg-zinc-900">
+        <h2 class="text-sm font-black uppercase tracking-widest text-amber-500 mb-4">Aguardando a SMS real chegar (<%= aguardandoSms.length %>)</h2>
+        <div class="space-y-2">
+          <% aguardandoSms.forEach(r => { %>
+            <div class="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl text-sm">
+              <span><b><%= r.nome_contato %></b> — <%= r.nome_grupo %></span>
+              <span class="font-bold"><%= r.valor %> MT</span>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (aguardandoCliente.length > 0) { %>
+      <div class="mb-8 p-6 border-2 border-amber-500 rounded-3xl bg-white dark:bg-zinc-900">
+        <h2 class="text-sm font-black uppercase tracking-widest text-amber-500 mb-4">SMS já chegou, ninguém postou no grupo ainda (<%= aguardandoCliente.length %>)</h2>
+        <div class="space-y-2">
+          <% aguardandoCliente.forEach(s => { %>
+            <div class="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl text-sm">
+              <span><b><%= s.remetente_nome || '(sem nome)' %></b> — <%= s.id_transacao %></span>
+              <span class="font-bold"><%= s.valor %> MT</span>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (aguardandoAtribuicao.length > 0) { %>
+      <div class="mb-8 p-6 border-2 border-red-500 rounded-3xl bg-white dark:bg-zinc-900">
+        <h2 class="text-sm font-black uppercase tracking-widest text-red-500 mb-4">Precisam de atribuição manual — !atribuir (<%= aguardandoAtribuicao.length %>)</h2>
+        <div class="space-y-2">
+          <% aguardandoAtribuicao.forEach(p => { %>
+            <div class="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl text-sm">
+              <span><b><%= p.remetente_nome %></b> — <%= p.nome_grupo %></span>
+              <span class="font-bold"><%= p.valor %> MT</span>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (naoReconhecidas.length > 0) { %>
+      <div class="mb-8 p-6 border-2 border-amber-500 rounded-3xl bg-white dark:bg-zinc-900">
+        <h2 class="text-sm font-black uppercase tracking-widest text-amber-500 mb-4">Enviaram um valor, mas o bot não conseguiu processar (<%= naoReconhecidas.length %>)</h2>
+        <div class="space-y-2">
+          <% naoReconhecidas.forEach(m => { %>
+            <div class="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl text-sm">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-bold"><%= m.nome_contato %> — <%= m.nome_grupo %></span>
+                <span class="text-[10px] text-zinc-500"><%= m.criado_em %></span>
+              </div>
+              <p class="text-xs text-zinc-500 truncate"><%= m.texto %></p>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="p-6 border border-zinc-200 dark:border-zinc-800 rounded-3xl bg-white dark:bg-zinc-900">
+      <h2 class="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4">Histórico recente</h2>
+      <% if (historico.length === 0) { %>
+        <p class="text-zinc-500 text-sm">Nenhum pagamento processado ainda.</p>
+      <% } %>
+      <div class="space-y-2">
+        <% historico.forEach(h => { %>
+          <div class="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl text-sm">
+            <div>
+              <div class="font-bold"><%= h.nome_grupo %></div>
+              <div class="text-xs text-zinc-500"><%= h.data_recebimento %> · <%= h.id_transacao %></div>
+            </div>
+            <div class="text-right">
+              <div class="font-bold"><%= h.valor %> MT</div>
+              <div class="text-[10px] uppercase font-black tracking-wider text-zinc-500"><%= h.status %></div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

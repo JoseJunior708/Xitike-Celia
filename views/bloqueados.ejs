@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'media' }</script>
+  <title>Xitike Célia — Bloqueados</title>
+</head>
+<body class="bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 min-h-screen transition-colors duration-500">
+
+  <main class="max-w-5xl mx-auto p-6 md:py-12">
+    <header class="mb-10 flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <h1 class="text-3xl font-black">Sinalizados</h1>
+        <p class="text-zinc-500">Reciclaram um comprovativo, mas já tinham recebido o pote — não removidos automaticamente.</p>
+      </div>
+      <a href="/admin" class="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-pink-500 transition-colors">← Voltar ao painel</a>
+    </header>
+
+    <% if (bloqueados.length === 0) { %>
+      <p class="text-zinc-500">Ninguém sinalizado até agora.</p>
+    <% } %>
+
+    <div class="space-y-3">
+      <% bloqueados.forEach(b => { %>
+        <div class="p-5 border-2 border-red-500 rounded-2xl bg-white dark:bg-zinc-900">
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-black"><%= b.nome %></span>
+            <span class="text-xs text-zinc-500"><%= b.nome_grupo %></span>
+          </div>
+          <p class="text-sm text-zinc-500"><%= b.motivo %></p>
+          <p class="text-[10px] text-zinc-600 mt-2 uppercase font-bold tracking-wider">Sinalizado em <%= b.criado_em %> — resolve com !desbloquear no grupo depois de rever</p>
+        </div>
+      <% }) %>
+    </div>
+  </main>
+</body>
+</html>

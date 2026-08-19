@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'media' }</script>
-  <title>Xitike Célia — Acesso</title>
+  <title>Xitike Célia</title>
 </head>
 <body class="bg-zinc-100 dark:bg-black min-h-screen flex items-center justify-center p-6 transition-colors duration-500">
 
@@ -22,6 +22,9 @@
     </div>
 
     <form method="POST" action="/login" class="space-y-6">
+      <input type="text" name="website" tabindex="-1" autocomplete="off"
+             style="position:absolute; left:-9999px; opacity:0; height:0; width:0;">
+
       <div class="relative">
         <label class="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Chave de Acesso</label>
 

@@ -1,6 +1,6 @@
-import 'dotenv/config';
-import express from 'express';
+import 'dotenv/config';import express from 'express';
 import session from 'express-session';
+import helmet from 'helmet';
 import { open } from 'sqlite';
 import sqlite3 from 'sqlite3';
 import os from 'os';
@@ -26,6 +26,18 @@ if (!SESSION_SECRET || !ADMIN_PASSWORD) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // pra secure:true no cookie funcionar atrás do Caddy/reverse proxy
+
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// Força HTTPS em produção (a app confia no cabeçalho do proxy pra saber se já veio por HTTPS).
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && !req.secure) {
+    return res.redirect(`https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
+
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
   secret: SESSION_SECRET,
@@ -34,6 +46,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
     maxAge: 1000 * 60 * 60 * 8 // 8 horas
   }
 }));
@@ -42,7 +55,7 @@ app.use(express.static('public'));
 
 const db = await open({ filename: './xitike.db', driver: sqlite3.Database });
 
-// limite pra tentativas de login (
+// --- Rate limit simples pra tentativas de login (em memória, por IP) ---
 const tentativasLogin = new Map();
 const LIMITE_TENTATIVAS = 5;
 const JANELA_MS = 15 * 60 * 1000; // 15 min
@@ -55,6 +68,13 @@ function verificarLogin(req, res, next) {
 app.get('/login', (req, res) => res.render('login', { erro: null }));
 
 app.post('/login', async (req, res) => {
+  // Honeypot: campo escondido do CSS, invisível pra gente mas visível pra bots
+  // que preenchem formulários às cegas. Se vier preenchido, é bot — rejeita
+  // sem dar pista nenhuma de que foi detetado.
+  if (req.body.website) {
+    return res.render('login', { erro: 'Palavra-passe incorreta. Tenta novamente.' });
+  }
+
   const ip = req.ip;
   const agora = Date.now();
   const registo = tentativasLogin.get(ip) || { count: 0, desde: agora };
@@ -85,7 +105,7 @@ app.post('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
 });
 
-// Painel de administração 
+// --- Painel de administração ---
 app.get('/admin', verificarLogin, async (req, res) => {
   try {
     const grupos = await db.all('SELECT * FROM grupos');
@@ -134,10 +154,26 @@ app.get('/admin/pagamentos', verificarLogin, async (req, res) => {
     const aguardandoAtribuicao = (await db.all('SELECT * FROM pagamentos_pendentes ORDER BY data_recebimento DESC'))
       .map(p => ({ ...p, nome_grupo: nomeGrupo[p.id_grupo] || '—' }));
 
-    res.render('pagamentos', { historico, aguardandoCliente, aguardandoSms, aguardandoAtribuicao });
+    const naoReconhecidas = (await db.all('SELECT * FROM mensagens_nao_reconhecidas ORDER BY criado_em DESC LIMIT 50'))
+      .map(m => ({ ...m, nome_grupo: nomeGrupo[m.id_grupo] || '—' }));
+
+    res.render('pagamentos', { historico, aguardandoCliente, aguardandoSms, aguardandoAtribuicao, naoReconhecidas });
   } catch (error) {
     console.error('ERRO NA TELA DE PAGAMENTOS:', error);
     res.status(500).send('Erro ao processar a tela de pagamentos.');
+  }
+});
+
+app.get('/admin/bloqueados', verificarLogin, async (req, res) => {
+  try {
+    const grupos = await db.all('SELECT id_grupo, nome_grupo FROM grupos');
+    const nomeGrupo = Object.fromEntries(grupos.map(g => [g.id_grupo, g.nome_grupo]));
+    const bloqueados = (await db.all('SELECT * FROM membros_bloqueados ORDER BY criado_em DESC'))
+      .map(b => ({ ...b, nome_grupo: nomeGrupo[b.id_grupo] || '—' }));
+    res.render('bloqueados', { bloqueados });
+  } catch (error) {
+    console.error('ERRO NA TELA DE BLOQUEADOS:', error);
+    res.status(500).send('Erro ao processar a tela de bloqueados.');
   }
 });
 
@@ -164,19 +200,25 @@ app.get('/logo', (req, res) => {
   res.status(404).end();
 });
 
+const EXTENSAO_POR_MIMETYPE = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' };
+
 app.post('/admin/logo', verificarLogin, upload.single('logo'), (req, res) => {
   if (req.file) {
-    const destino = 'public/logo' + req.file.originalname.slice(req.file.originalname.lastIndexOf('.'));
+    const extensao = EXTENSAO_POR_MIMETYPE[req.file.mimetype];
+    if (!extensao) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).send('Tipo de ficheiro não suportado.');
+    }
     // Remove logo antiga (pode ter extensão diferente da nova)
-    for (const ext of ['.png', '.jpg', '.jpeg', '.webp']) {
+    for (const ext of Object.values(EXTENSAO_POR_MIMETYPE)) {
       try { fs.unlinkSync('public/logo' + ext); } catch { /* não existia, tudo bem */ }
     }
-    fs.renameSync(req.file.path, destino);
+    fs.renameSync(req.file.path, 'public/logo' + extensao);
   }
   res.redirect('/admin');
 });
 
-
+// --- Webhook pro Atalho do iPhone da Célia ---
 // O Atalho manda POST aqui sempre que chega uma SMS de M-Pesa/e-Mola.
 // Protegido por um token simples no cabeçalho Authorization.
 app.post('/api/gateway/sms', express.json(), async (req, res) => {
@@ -211,10 +253,11 @@ app.post('/api/gateway/sms', express.json(), async (req, res) => {
 });
 
 iniciarWhatsApp();
-app.listen(3000, '0.0.0.0', () => {
-  console.log('Servidor Xitike rodando em http://localhost:3000/admin');
+const porta = process.env.PORT || 3000;
+app.listen(porta, '0.0.0.0', () => {
+  console.log(`Servidor Xitike rodando na porta ${porta}`);
   const ipLocal = obterIpLocal();
   if (ipLocal) {
-    console.log(`No telemóvel (mesmo WiFi): http://${ipLocal}:3000/admin`);
+    console.log(`No telemóvel (mesmo WiFi): http://${ipLocal}:${porta}/admin`);
   }
 });

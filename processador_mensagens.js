@@ -6,27 +6,25 @@ import sqlite3 from 'sqlite3';
 import qrcode from 'qrcode-terminal';
 import { createWorker } from 'tesseract.js';
 
+
 const NUMEROS_AUTORIZADOS = (process.env.NUMEROS_AUTORIZADOS || '')
   .split(',')
   .map(n => normalizarNumero(n))
   .filter(Boolean);
 
 if (NUMEROS_AUTORIZADOS.length === 0) {
-  console.warn('');
+  console.warn('AVISO: NUMEROS_AUTORIZADOS está vazio no .env — ninguém vai conseguir confirmar pagamentos ou criar xitiques.');
 } else {
   console.log('Números autorizados (admin):', NUMEROS_AUTORIZADOS);
 }
 
-// Comprovativo de cliente com destino fora desta lista = aviso (pode ser erro
-//). Comprovativo editado (mesmo ID já usado) = ban na hora, isso não
-// tem como ser engano.
 const NUMEROS_RECEBIMENTO_CELIA = (process.env.NUMEROS_RECEBIMENTO_CELIA || '')
   .split(',')
   .map(n => n.replace(/\D/g, ''))
   .filter(Boolean);
 
 if (NUMEROS_RECEBIMENTO_CELIA.length === 0) {
-  console.warn('');
+  console.warn('AVISO: NUMEROS_RECEBIMENTO_CELIA está vazio no .env — checagem de destino errado/editado está DESLIGADA.');
 }
 
 // Normaliza um número moçambicano pra comparação: só dígitos, sem prefixo 258.
@@ -47,7 +45,17 @@ function getDb() {
   return dbPromise;
 }
 
-
+/**
+ * Parsers de mensagens "Recebeste" — chega no telemóvel de quem RECEBE o
+ * dinheiro. Pode ser a Célia (contribuição de um cliente) ou um membro
+ * (prova de ter recebido o pote da rodada, veja o tratamento mais abaixo).
+ *
+ * Calibrado com exemplos reais fornecidos em 20/07/2026:
+ *   M-Pesa: "Confirmado DB99JOEEG51. Recebeste 800.00MT de 258846555876-
+ *            MARTIN AGOSTINHO BANZE aos 9/2/26 as 8:54 AM. ..."
+ *   e-Mola: "ID de tranacao PP250926.1004112801.Recebeste 860.00MT de conta
+ *            873722988, nome: Bruno Marcelino Rodrigues Mendes as ... ..."
+ */
 function extrairMPesaRecebido(texto) {
   const m = texto.match(
     /Confirmado\s+([A-Z0-9]{8,15})\.\s*Recebeste\s+(\d+(?:[.,]\d{1,2})?)\s*MT\s+de\s+(\d{6,12})-?\s*([^.]+?)\s+aos/is
@@ -86,7 +94,7 @@ function extrairMPesaEnviado(texto) {
 }
 
 function extrairEMolaEnviado(texto) {
-
+  // Variante 1: "...para o MKHESH 835080105 atraves do SIMO ... montante: 120.00MT"
   let m = texto.match(
     /ID d[ae] tran[sç]?acao:?\s*([a-zA-Z0-9.]+)\..*?para o \w+\s+(\d{6,12}).*?montante:\s*(\d+(?:[.,]\d{1,2})?)\s*MT/is
   );
@@ -117,7 +125,7 @@ function normalizarTexto(str) {
 }
 
 /**
- * Tenta ver se a semelhança com o nome que veio na SMS (ex: "TIMPWALO JR.") com o
+ * Tenta conectarr o nome que veio na SMS (ex: "MARTIN AGOSTINHO BANZE") com o
  * nome que cada membro já tem no WhatsApp. Só aceita se exatamente UM
  * membro tiver pelo menos uma palavra em comum (com 3+ letras, pra evitar
  * bater em "de", "da", etc). Se zero ou mais de um baterem, fica ambíguo.
@@ -149,7 +157,8 @@ function aplicarPagamento(membro, valorPago, valorDiario) {
   return { novoTotalPago, diasPagos, resto };
 }
 
-
+// Monta a lista de todos os membros do grupo com o checklist de dias pagos,
+// no formato "Nome ✅✅✅" — enviada de novo a cada pagamento confirmado.
 async function gerarListaChecklist(db, idGrupo, valorDiario) {
   const membros = await db.all('SELECT nome, total_pago FROM membros WHERE id_grupo = ?', [idGrupo]);
   if (membros.length === 0) return '(nenhum membro registado ainda)';
@@ -204,7 +213,11 @@ async function tratarMensagem(sock, db, msg) {
 
   const idConversa = msg.key.remoteJid;
   const ehGrupo = idConversa?.endsWith('@g.us');
-  
+  // O WhatsApp às vezes manda o remetente como "LID" (identificador interno,
+  // ex: 279035636666482@lid) em vez do número de telefone real. Desde o
+  // Baileys 6.8, participantAlt/remoteJidAlt trazem a versão em número de
+  // telefone quando isso acontece — usamos essa versão sempre que existir,
+  // porque comparamos remetentes com números de telefone reais no .env.
   let remetente = ehGrupo ? msg.key.participant : msg.key.remoteJid;
   if (remetente?.endsWith('@lid')) {
     remetente = (ehGrupo ? msg.key.participantAlt : msg.key.remoteJidAlt) || remetente;
@@ -223,7 +236,7 @@ async function tratarMensagem(sock, db, msg) {
   const ehAdmin = NUMEROS_AUTORIZADOS.includes(normalizarNumero(remetente));
   console.log(`Mensagem de ${remetente} (normalizado: ${normalizarNumero(remetente)}) — ehAdmin: ${ehAdmin}${msg.key.participant?.endsWith('@lid') ? ' [participant original era LID: ' + msg.key.participant + ']' : ''}`);
 
-  // !novo — só admins podem criar um xitique novo, e só dentro de um grupo 
+  // --- !novo — só admins podem criar um xitique novo, e só dentro de um grupo ---
   if (texto.startsWith('!novo')) {
     if (!ehAdmin) {
       await sock.sendMessage(idConversa, { text: 'Só um administrador pode criar um novo xitique.' });
@@ -259,13 +272,15 @@ async function tratarMensagem(sock, db, msg) {
       text:
         'Comandos do Xitike:\n' +
         '!novo Nome Valor DiasAteReceber — cria um xitique (admin)\n' +
-        '!ordem 84XXXXXXX 3 — define a posição desse membro na fila de recebimento (admin)\n' +
+        '!ordem 840000000 3 — define a posição desse membro na fila de recebimento (admin)\n' +
         '!fila — mostra a ordem de quem recebe o pote\n' +
-        '!recebeu 84XXXXXXX — marca que esse membro recebeu o pote nesta rodada e avança a fila (admin)\n' +
-        '!cadastrar 84XXXXXXX Nome Completo — regista um membro que ainda não escreveu no grupo (admin)\n' +
+        '!recebeu 840000000 — marca que esse membro recebeu o pote nesta rodada e avança a fila (admin)\n' +
+        '!cadastrar 840000000 Nome Completo — regista um membro que ainda não escreveu no grupo (admin)\n' +
         '!pagos (seguido de uma linha "numero Nome valor" por membro) — importa em massa quem já pagou (admin)\n' +
-        '!atribuir IDTransacao 84XXXXXXX — atribui manualmente um pagamento pendente a um membro (admin)\n' +
-        '!banir 84XXXXXXX — remove um membro do grupo manualmente (admin)\n' +
+        '!atribuir IDTransacao 845490083 — atribui manualmente um pagamento pendente a um membro (admin)\n' +
+        '!banir 840000000— remove um membro do grupo manualmente (admin)\n' +
+        '!bloqueados — lista quem foi sinalizado por reciclar comprovativo (admin)\n' +
+        '!desbloquear 840000000 — tira alguém da lista de sinalizados (admin)\n' +
         '!pendentes — lista pagamentos que a Célia ainda precisa atribuir\n' +
         '!resumo — mostra a situação de cada membro\n' +
         'Cliente: cola aqui a tua SMS de confirmação de pagamento (M-Pesa/e-Mola).\n' +
@@ -282,7 +297,7 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  //  !ordem — admin define a posição de um membro na fila de recebimento 
+  // --- !ordem — admin define a posição de um membro na fila de recebimento ---
   if (texto.startsWith('!ordem')) {
     if (!ehAdmin) return;
     const partes = texto.split(' ').filter(Boolean);
@@ -302,7 +317,7 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  //!fila — mostra a ordem de recebimento definida pelo admin 
+  // --- !fila — mostra a ordem de recebimento definida pelo admin ---
   if (texto === '!fila') {
     const membros = await db.all(
       'SELECT nome, ordem, ultima_rodada_recebida FROM membros WHERE id_grupo = ? ORDER BY (ordem IS NULL), ordem ASC',
@@ -316,12 +331,12 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // !recebeu — admin confirma que alguém recebeu o pote e avança a rodada 
+  // --- !recebeu — admin confirma que alguém recebeu 
   if (texto.startsWith('!recebeu')) {
     if (!ehAdmin) return;
     const numeroAlvo = texto.split(' ').filter(Boolean)[1];
     if (!numeroAlvo) {
-      await sock.sendMessage(idConversa, { text: 'Uso correto: !recebeu 84XXXXXXX' });
+      await sock.sendMessage(idConversa, { text: 'Uso correto: !recebeu 845490083' });
       return;
     }
     const jidAlvo = numeroAlvo.includes('@') ? numeroAlvo : `${numeroAlvo.replace(/\D/g, '')}@s.whatsapp.net`;
@@ -338,8 +353,8 @@ async function tratarMensagem(sock, db, msg) {
     [remetente, idConversa, nomeContato]
   );
 
-  // !pendentes — lista pagamentos que não bateram com ninguém automaticamente 
-  // !banir — admin remove um membro por: suspeita de burla. 
+  // --- !pendentes — lista pagamentos que não bateram com ninguém automaticamente ---
+  // --- !banir — admin remove um membro manualmente (ex: suspeita não coberta pelo automático) ---
   if (texto.startsWith('!banir')) {
     if (!ehAdmin) return;
     const numeroAlvo = texto.split(' ').filter(Boolean)[1];
@@ -358,7 +373,34 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  //!cadastrar — admin regista um membro que ainda não escreveu no grupo 
+  // --- !bloqueados — lista quem foi sinalizado por reciclar comprovativo ---
+  if (texto === '!bloqueados') {
+    if (!ehAdmin) return;
+    const bloqueados = await db.all('SELECT * FROM membros_bloqueados WHERE id_grupo = ?', [idConversa]);
+    if (bloqueados.length === 0) {
+      await sock.sendMessage(idConversa, { text: 'Nenhum membro sinalizado.' });
+      return;
+    }
+    const linhas = bloqueados.map(b => `${b.nome} — ${b.motivo}`).join('\n');
+    await sock.sendMessage(idConversa, { text: `Sinalizados:\n${linhas}\n\nUsa !desbloquear 84XXXXXXX pra limpar depois de reveres.` });
+    return;
+  }
+
+  // --- !desbloquear — tira alguém da lista de sinalizados, depois da Célia rever ---
+  if (texto.startsWith('!desbloquear')) {
+    if (!ehAdmin) return;
+    const numeroAlvo = texto.split(' ').filter(Boolean)[1];
+    if (!numeroAlvo) {
+      await sock.sendMessage(idConversa, { text: 'Uso correto: !desbloquear 84XXXXXXX' });
+      return;
+    }
+    const jidAlvo = numeroAlvo.includes('@') ? numeroAlvo : `${numeroAlvo.replace(/\D/g, '')}@s.whatsapp.net`;
+    await db.run('DELETE FROM membros_bloqueados WHERE id_whatsapp = ? AND id_grupo = ?', [jidAlvo, idConversa]);
+    await sock.sendMessage(idConversa, { text: `${numeroAlvo} removido da lista de sinalizados.` });
+    return;
+  }
+
+  // --- !cadastrar — admin regista um membro que ainda não escreveu no grupo ---
   if (texto.startsWith('!cadastrar')) {
     if (!ehAdmin) return;
     const partes = texto.split(' ').filter(Boolean);
@@ -378,14 +420,14 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // --- !pagos — admin importa em massa quem já pagou (uma linha por membro)
+  // --- !pagos — admin importa em massa quem já pagou (uma linha por membro) ---
   // Formato, uma linha por membro:
   //   !pagos
-  //   84XXXXXXX Nome Completo 100
-  //   84YYYYYYY Outro Nome 100
+  //   866690083 Nome Completo 100
+  //   845490083 Outro Nome 100
   // O valor no fim de cada linha é o total já pago por essa pessoa até agora.
   // Não passa pela checagem de destino/duplicado — é registo manual da Célia,
-  // que já validou essas transações antes da criação do bot.
+  // que já validou essas transações antes do bot existir.
   if (texto.startsWith('!pagos')) {
     if (!ehAdmin) return;
     const linhas = texto.split('\n').slice(1).map(l => l.trim()).filter(Boolean);
@@ -449,7 +491,7 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // !atribuir — admin liga manualmente um pagamento pendente a um membro 
+  // --- !atribuir — admin liga manualmente um pagamento pendente a um membro ---
   if (texto.startsWith('!atribuir')) {
     if (!ehAdmin) return;
     const partes = texto.split(' ').filter(Boolean);
@@ -487,28 +529,47 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // interpretar como confirmação de pagamento 
+  // --- Tenta interpretar como confirmação de pagamento ---
   const confirmacao = extrairDadosConfirmacao(texto);
   if (!confirmacao) {
     if (/\bMT\b|confirmad[oa]|transferist[e]s?|recebest[e]s?/i.test(texto)) {
       console.log('Mensagem parece confirmação mas não bateu com nenhum formato conhecido:\n---\n' + texto + '\n---');
+      await db.run(
+        `INSERT INTO mensagens_nao_reconhecidas (id_grupo, remetente, nome_contato, texto) VALUES (?, ?, ?, ?)`,
+        [idConversa, remetente, nomeContato, texto]
+      );
       await sock.sendMessage(idConversa, {
-        text: `${nomeContato}, recebi a tua mensagem mas não consegui reconhecer o formato do comprovativo. Confirma manualmente com a Célia por agora — este caso vai ser reportado pra corrigirmos o reconhecimento automático.`
+        text: `${nomeContato}, Recebi a tua mensagem mas não consegui reconhecer o formato do comprovativo. Confirma manualmente com a Célia por agora! Este caso vai ser reportado pra corrigirmos o reconhecimento automático.`
       });
     }
     return;
   }
 
-  // "Transferiste" Duplicado é prova de burla e merece ser banido.
+  // Só a Célia tem a SMS de "Recebeste"; qualquer cliente pode postar a própria
+  // "Transferiste". Duplicado é prova concreta de fraude nos dois casos.
   const jaRegistado = await db.get('SELECT 1 FROM sms_recebidos WHERE id_transacao = ?', [confirmacao.id_transacao]);
   if (jaRegistado) {
     if (confirmacao.tipo === 'enviado') {
-      await sock.sendMessage(idConversa, { text: `${nomeContato}, este comprovativo (${confirmacao.id_transacao}) já foi usado antes. Vais ser removido do grupo.` });
-      try {
-        await sock.groupParticipantsUpdate(idConversa, [remetente], 'remove');
-      } catch (erroRemocao) {
-        console.error('Não consegui remover o membro (o bot é admin do grupo?):', erroRemocao);
-        await sock.sendMessage(idConversa, { text: `Não consegui remover ${nomeContato} automaticamente — o Xitike precisa de ser admin do grupo pra isso.` });
+      const membroSuspeito = await db.get('SELECT * FROM membros WHERE id_whatsapp = ? AND id_grupo = ?', [remetente, idConversa]);
+      const jaRecebeuOPote = membroSuspeito?.ultima_rodada_recebida != null;
+
+      if (jaRecebeuOPote) {
+        // Já recebeu o pote — remover não desfaz nada, e pode ser precipitado.
+        // Fica sinalizado pra Célia decidir com calma.
+        await db.run(
+          `INSERT INTO membros_bloqueados (id_whatsapp, id_grupo, nome, motivo) VALUES (?, ?, ?, ?)
+           ON CONFLICT(id_whatsapp, id_grupo) DO UPDATE SET motivo=excluded.motivo, criado_em=CURRENT_TIMESTAMP`,
+          [remetente, idConversa, nomeContato, `Reciclou o comprovativo ${confirmacao.id_transacao} (já tinha recebido o pote)`]
+        );
+        await sock.sendMessage(idConversa, { text: `${nomeContato}, este comprovativo (${confirmacao.id_transacao}) já foi usado antes. Como já recebeste o pote desta rodada, não vais ser removido automaticamente — isto foi sinalizado pra Célia rever.` });
+      } else {
+        await sock.sendMessage(idConversa, { text: `${nomeContato}, este comprovativo (${confirmacao.id_transacao}) já foi usado antes. Vais ser removido do grupo.` });
+        try {
+          await sock.groupParticipantsUpdate(idConversa, [remetente], 'remove');
+        } catch (erroRemocao) {
+          console.error('Não consegui remover o membro (o bot é admin do grupo?):', erroRemocao);
+          await sock.sendMessage(idConversa, { text: `Não consegui remover ${nomeContato} automaticamente — o Xitike precisa de ser admin do grupo pra isso.` });
+        }
       }
     } else {
       await sock.sendMessage(idConversa, { text: `Este comprovativo (${confirmacao.id_transacao}) já tinha sido registado antes. Não contado em duplicado.` });
@@ -520,9 +581,9 @@ async function tratarMensagem(sock, db, msg) {
     [confirmacao.id_transacao, idConversa, remetente, confirmacao.valor, texto]
   );
 
-  //  "Recebeste" postado por um MEMBRO comum
-  // Interpretamos isto como prova de ter recebido o POTE da rodada (não uma
-  // contribuição) — só conta se o dinheiro veio de um número conhecido da Célia.
+  // --- "Recebeste" postado por um MEMBRO comum 
+  // Interpretamos isto como prova de ter recebido
+ //só conta se o dinheiro veio de um número conhecido da Célia.
   if (confirmacao.tipo === 'recebido' && !ehAdmin) {
     const numeroOrigemNormalizado = normalizarNumero(confirmacao.remetente_numero);
     const veioDaCelia = NUMEROS_RECEBIMENTO_CELIA.length > 0 && NUMEROS_RECEBIMENTO_CELIA.includes(numeroOrigemNormalizado);
@@ -540,13 +601,13 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // Cliente ("Transferiste ... para <destino>")
+  // --- Cliente auto-reportando ("Transferiste ... para <destino>") ---
   if (confirmacao.tipo === 'enviado') {
     const webhookAtivo = !!process.env.WEBHOOK_TOKEN;
 
     if (webhookAtivo) {
-      // Modo seguro: só validq se a mesma transação já tiver chegado como
-      // SMS celular da Célia (via Atalho). Sem isso, fica à espera.
+      // Modo seguro: só valida se a mesma transação já tiver chegado como
+      // SMS no celular da Célia (via Atalho). Sem isso, fica à espera.
       const smsReal = await db.get('SELECT * FROM sms_celia WHERE id_transacao = ? AND usado = 0', [confirmacao.id_transacao]);
 
       if (!smsReal) {
@@ -591,6 +652,7 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
+  // --- Célia reportando o que recebeu ("Recebeste ... de <remetente>") ---
   const membrosDoGrupo = await db.all('SELECT * FROM membros WHERE id_grupo = ?', [idConversa]);
   const { membro, ambiguo } = encontrarMembroPorNome(confirmacao.remetente_nome, membrosDoGrupo);
 
@@ -625,15 +687,31 @@ export async function iniciarWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     const { version } = await fetchLatestBaileysVersion();
     console.log('Usando versão do protocolo WhatsApp:', version.join('.'));
-    const sock = makeWASocket({ auth: state, version });
+    const sock = makeWASocket({ auth: state, version, printQRInTerminal: false });
     sockAtual = sock;
+
+    const numeroBot = (process.env.NUMERO_BOT || '').replace(/\D/g, '');
+    if (!state.creds.registered && numeroBot) {
+      setTimeout(async () => {
+        try {
+          const codigoPareamento = await sock.requestPairingCode(numeroBot);
+          console.log('\n================================');
+          console.log('CÓDIGO DE PAREAMENTO:', codigoPareamento);
+          console.log('No WhatsApp do número', numeroBot, ':');
+          console.log('Aparelhos ligados > Ligar aparelho > Ligar com número de telefone');
+          console.log('================================\n');
+        } catch (erro) {
+          console.error('Erro ao pedir código de pareamento:', erro);
+        }
+      }, 3000);
+    }
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
       const { connection, lastDisconnect, qr } = update;
 
-      if (qr) {
+      if (qr && !numeroBot) {
         console.log('\nEscaneia este QR code com o WhatsApp (Aparelhos ligados > Ligar aparelho):\n');
         qrcode.generate(qr, { small: true });
       }
@@ -663,14 +741,14 @@ export async function iniciarWhatsApp() {
 /**
  * Processa uma SMS de "Recebeste" vinda diretamente do telemóvel da Célia
  * (via Atalhos do iPhone → webhook). Isto NUNCA escolhe o grupo/membro
- * sozinho por nome — quem diz o grupo certo é sempre o cliente, ao postar a
+ * sozinho por nome — quem diz o grupo certo é sempre o cliente, ao colar a
  * confirmação lá dentro (uma pessoa pode estar em vários xitiques ao mesmo
- * tempo.
+ * tempo, então adivinhar pelo nome não é seguro).
  *
  * Em vez disso, esta função só guarda a SMS real e cruza pelo ID da
- * transação: se um cliente já tinha postado a confirmação num grupo e
+ * transação: se um cliente já tinha colado a confirmação num grupo e
  * estava à espera, completa o pagamento agora. Se ainda não postou, fica
- * guardada à espera de alguém postar.
+ * guardada à espera de alguém colar.
  */
 export async function processarSmsExterna(texto) {
   const db = await getDb();

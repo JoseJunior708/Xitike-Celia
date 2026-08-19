@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'media' }</script>
-  <title>Xitike Célia — Painel</title>
+  <title>Xitike Célia</title>
 </head>
 <body class="bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 min-h-screen transition-colors duration-500">
 
@@ -25,7 +25,7 @@
           <div id="menuLogo" class="hidden absolute left-0 top-16 z-10 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl overflow-hidden text-sm font-bold w-36">
             <button type="button"
                     onclick="if(document.getElementById('logoImg').style.display==='block'){window.open('/logo','_blank')}; document.getElementById('menuLogo').classList.add('hidden')"
-                    class="block w-full text-left px-4 py-2.5 hover:bg-zinc-800 text-whit">Ver foto</button>
+                    class="block w-full text-left px-4 py-2.5 hover:bg-zinc-800">Ver foto</button>
             <button type="button"
                     onclick="document.getElementById('inputLogo').click(); document.getElementById('menuLogo').classList.add('hidden')"
                     class="block w-full text-left px-4 py-2.5 hover:bg-zinc-800 text-pink-500">Trocar foto</button>
@@ -42,10 +42,11 @@
       </div>
 
       <div class="flex items-center gap-3">
+        <a href="/admin/pagamentos" class="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-pink-500 transition-colors">Pagamentos</a>
         <div class="flex items-center gap-2 bg-zinc-900 px-4 py-2 rounded-full border border-zinc-800">
           <div class="w-2.5 h-2.5 rounded-full <%= botOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500' %>"></div>
           <span class="text-xs font-bold uppercase tracking-wider text-zinc-400">
-            <%= botOnline ? 'Bot Online' : 'Bot Offline' %>
+            <%= botOnline ? 'Sistema Online' : 'Sistema Offline' %>
           </span>
         </div>
         <form method="POST" action="/logout">
@@ -68,15 +69,15 @@
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div class="p-6 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-            <p class="text-xs font-bold text-zinc-400 uppercase">Total Acumulado:</p>
+            <p class="text-xs font-bold text-zinc-400 uppercase">Total Acumulado</p>
             <p class="text-3xl font-black text-pink-600 mt-2"><%= (grupo.totalFaturado || 0).toLocaleString() %> <span class="text-sm">MT</span></p>
           </div>
           <div class="p-6 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-            <p class="text-xs font-bold text-zinc-400 uppercase">Meta do Grupo:</p>
+            <p class="text-xs font-bold text-zinc-400 uppercase">Meta do Grupo</p>
             <p class="text-3xl font-black mt-2"><%= (grupo.metaTotal || 0).toLocaleString() %> <span class="text-sm">MT</span></p>
           </div>
           <div class="p-6 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-            <p class="text-xs font-bold text-zinc-400 uppercase">Membros:</p>
+            <p class="text-xs font-bold text-zinc-400 uppercase">Membros</p>
             <p class="text-3xl font-black mt-2"><%= grupo.membrosAtivos %></p>
           </div>
         </div>
@@ -84,8 +85,8 @@
         <p class="text-xs font-bold text-zinc-400 uppercase mb-4">Rodada atual: <%= grupo.rodada_atual %></p>
 
         <div class="mb-8 p-6 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-          <h4 class="text-xs font-black text-zinc-400 uppercase tracking-widest mb-2">Números da Célia</h4>
-          <p class="text-xs text-zinc-500 mb-3"> Não editável por aqui!</p>
+          <h4 class="text-xs font-black text-zinc-400 uppercase tracking-widest mb-2">Números oficiais da Célia</h4>
+          <p class="text-xs text-zinc-500 mb-3">Configurado no .env do servidor (NUMEROS_RECEBIMENTO_CELIA) — não editável por aqui.</p>
           <% if (numerosRecebimentoCelia.length === 0) { %>
             <p class="text-sm text-amber-500 font-bold">Nenhum número configurado — checagem de destino errado/editado está desligada.</p>
           <% } else { %>
@@ -102,13 +103,13 @@
           <% grupo.membros.forEach(membro => { %>
             <div class="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800 rounded-xl">
               <span class="font-bold"><%= membro.ordem ? `${membro.ordem}. ` : '' %><%= membro.nome %></span>
-              <% if (membro.divida > 0) { %>
-                <span class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-red-500 text-white">Deve <%= membro.divida.toFixed(2) %> MT</span>
-              <% } else if (membro.credito > 0) { %>
-                <span class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white">Crédito <%= membro.credito.toFixed(2) %> MT</span>
-              <% } else { %>
-                <span class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-pink-500 text-white">Em dia</span>
-              <% } %>
+              <span class="text-lg tracking-wider">
+                <% if (membro.diasPagos > 0) { %>
+                  <%= .repeat(membro.diasPagos) %>
+                <% } else { %>
+                  <span class="text-xs font-black uppercase tracking-wider text-zinc-500">Sem pagamentos ainda</span>
+                <% } %>
+              </span>
             </div>
           <% }) %>
         </div>

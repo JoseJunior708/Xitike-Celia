@@ -45,17 +45,6 @@ function getDb() {
   return dbPromise;
 }
 
-/**
- * Parsers de mensagens "Recebeste" — chega no telemóvel de quem RECEBE o
- * dinheiro. Pode ser a Célia (contribuição de um cliente) ou um membro
- * (prova de ter recebido o pote da rodada, veja o tratamento mais abaixo).
- *
- * Calibrado com exemplos reais fornecidos em 20/07/2026:
- *   M-Pesa: "Confirmado DB99JOEEG51. Recebeste 800.00MT de 258846555876-
- *            MARTIN AGOSTINHO BANZE aos 9/2/26 as 8:54 AM. ..."
- *   e-Mola: "ID de tranacao PP250926.1004112801.Recebeste 860.00MT de conta
- *            873722988, nome: Bruno Marcelino Rodrigues Mendes as ... ..."
- */
 function extrairMPesaRecebido(texto) {
   const m = texto.match(
     /Confirmado\s+([A-Z0-9]{8,15})\.\s*Recebeste\s+(\d+(?:[.,]\d{1,2})?)\s*MT\s+de\s+(\d{6,12})-?\s*([^.]+?)\s+aos/is

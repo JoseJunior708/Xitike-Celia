@@ -30,7 +30,6 @@ app.set('trust proxy', 1); // pra secure:true no cookie funcionar atrás do Cadd
 
 app.use(helmet({ contentSecurityPolicy: false }));
 
-// Força HTTPS em produção (a app confia no cabeçalho do proxy pra saber se já veio por HTTPS).
 app.use((req, res, next) => {
   if (process.env.NODE_ENV === 'production' && !req.secure) {
     return res.redirect(`https://${req.headers.host}${req.url}`);
@@ -68,9 +67,8 @@ function verificarLogin(req, res, next) {
 app.get('/login', (req, res) => res.render('login', { erro: null }));
 
 app.post('/login', async (req, res) => {
-  // Honeypot: campo escondido do CSS, invisível pra gente mas visível pra bots
-  // que preenchem formulários às cegas. Se vier preenchido, é bot — rejeita
-  // sem dar pista nenhuma de que foi detetado.
+
+  // security
   if (req.body.website) {
     return res.render('login', { erro: 'Palavra-passe incorreta. Tenta novamente.' });
   }
@@ -105,7 +103,7 @@ app.post('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
 });
 
-// --- Painel de administração ---
+// administração 
 app.get('/admin', verificarLogin, async (req, res) => {
   try {
     const grupos = await db.all('SELECT * FROM grupos');
@@ -218,9 +216,6 @@ app.post('/admin/logo', verificarLogin, upload.single('logo'), (req, res) => {
   res.redirect('/admin');
 });
 
-// --- Webhook pro Atalho do iPhone da Célia ---
-// O Atalho manda POST aqui sempre que chega uma SMS de M-Pesa/e-Mola.
-// Protegido por um token simples no cabeçalho Authorization.
 app.post('/api/gateway/sms', express.json(), async (req, res) => {
   console.log('--- Webhook /api/gateway/sms recebeu uma chamada ---');
   const tokenEsperado = process.env.WEBHOOK_TOKEN;

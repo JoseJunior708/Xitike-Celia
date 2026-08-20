@@ -6,7 +6,6 @@ import sqlite3 from 'sqlite3';
 import qrcode from 'qrcode-terminal';
 import { createWorker } from 'tesseract.js';
 
-
 const NUMEROS_AUTORIZADOS = (process.env.NUMEROS_AUTORIZADOS || '')
   .split(',')
   .map(n => normalizarNumero(n))
@@ -45,6 +44,7 @@ function getDb() {
   return dbPromise;
 }
 
+
 function extrairMPesaRecebido(texto) {
   const m = texto.match(
     /Confirmado\s+([A-Z0-9]{8,15})\.\s*Recebeste\s+(\d+(?:[.,]\d{1,2})?)\s*MT\s+de\s+(\d{6,12})-?\s*([^.]+?)\s+aos/is
@@ -73,7 +73,6 @@ function extrairEMolaRecebido(texto) {
   };
 }
 
-// Cliente auto-reportando o próprio pagamento ("Transferiste ... para <destino>").
 function extrairMPesaEnviado(texto) {
   const m = texto.match(
     /Confirmado\s+([A-Z0-9]{8,15})\.\s*Transferiste\s+(\d+(?:[.,]\d{1,2})?)\s*MT.*?para\s+(\d{6,12})/is
@@ -104,7 +103,6 @@ function extrairDadosConfirmacao(texto) {
     || extrairMPesaEnviado(texto) || extrairEMolaEnviado(texto) || null;
 }
 
-// Remove acentos, baixa a caixa, tira pontuação — pra comparar nomes de forma tolerante.
 function normalizarTexto(str) {
   return (str || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -112,6 +110,7 @@ function normalizarTexto(str) {
     .replace(/[^a-z0-9\s]/g, '')
     .trim();
 }
+
 
 function encontrarMembroPorNome(nomeNaSms, membros) {
   const tokensAlvo = normalizarTexto(nomeNaSms).split(/\s+/).filter(t => t.length >= 3);
@@ -179,10 +178,6 @@ async function extrairTextoDaImagem(msg) {
 async function tratarMensagem(sock, db, msg) {
   if (!msg?.message || msg.key.fromMe) return;
 
-  // Uma mensagem editada nunca é aceite como confirmação de pagamento — um
-  // comprovativo colado de verdade não tem motivo pra ser editado depois.
-  // Isto bloqueia de vez o caso de alguém trocar o número/nome numa mensagem
-  // já enviada e tentar passar como se fosse nova.
   if (msg.message.editedMessage || msg.message.protocolMessage) {
     console.log('Mensagem editada/protocolo recebida — ignorada de propósito, nunca conta como confirmação.');
     return;
@@ -190,7 +185,6 @@ async function tratarMensagem(sock, db, msg) {
 
   const idConversa = msg.key.remoteJid;
   const ehGrupo = idConversa?.endsWith('@g.us');
- 
   let remetente = ehGrupo ? msg.key.participant : msg.key.remoteJid;
   if (remetente?.endsWith('@lid')) {
     remetente = (ehGrupo ? msg.key.participantAlt : msg.key.remoteJidAlt) || remetente;
@@ -209,7 +203,6 @@ async function tratarMensagem(sock, db, msg) {
   const ehAdmin = NUMEROS_AUTORIZADOS.includes(normalizarNumero(remetente));
   console.log(`Mensagem de ${remetente} (normalizado: ${normalizarNumero(remetente)}) — ehAdmin: ${ehAdmin}${msg.key.participant?.endsWith('@lid') ? ' [participant original era LID: ' + msg.key.participant + ']' : ''}`);
 
-  // !novo. só admins podem criar um xitique novo, e só dentro de um grupo ---
   if (texto.startsWith('!novo')) {
     if (!ehAdmin) {
       await sock.sendMessage(idConversa, { text: 'Só um administrador pode criar um novo xitique.' });
@@ -250,10 +243,10 @@ async function tratarMensagem(sock, db, msg) {
         '!recebeu 840000000 — marca que esse membro recebeu o pote nesta rodada e avança a fila (admin)\n' +
         '!cadastrar 840000000 Nome Completo — regista um membro que ainda não escreveu no grupo (admin)\n' +
         '!pagos (seguido de uma linha "numero Nome valor" por membro) — importa em massa quem já pagou (admin)\n' +
-        '!atribuir IDTransacao 845490083 — atribui manualmente um pagamento pendente a um membro (admin)\n' +
-        '!banir 840000000— remove um membro do grupo manualmente (admin)\n' +
+        '!atribuir IDTransacao 840000000 — atribui manualmente um pagamento pendente a um membro (admin)\n' +
+        '!banir 840000000 — remove um membro do grupo manualmente (admin)\n' +
         '!bloqueados — lista quem foi sinalizado por reciclar comprovativo (admin)\n' +
-        '!desbloquear 840000000 — tira alguém da lista de sinalizados (admin)\n' +
+        '!desbloquear 8840000000 — tira alguém da lista de sinalizados (admin)\n' +
         '!pendentes — lista pagamentos que a Célia ainda precisa atribuir\n' +
         '!resumo — mostra a situação de cada membro\n' +
         'Cliente: cola aqui a tua SMS de confirmação de pagamento (M-Pesa/e-Mola).\n' +
@@ -270,14 +263,13 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // --- !ordem — admin define a posição de um membro na fila de recebimento ---
   if (texto.startsWith('!ordem')) {
     if (!ehAdmin) return;
     const partes = texto.split(' ').filter(Boolean);
     const numeroAlvo = partes[1];
     const posicao = parseInt(partes[2], 10);
     if (!numeroAlvo || Number.isNaN(posicao)) {
-      await sock.sendMessage(idConversa, { text: 'Uso correto: !ordem 84XXXXXXX 3' });
+      await sock.sendMessage(idConversa, { text: 'Uso correto: !ordem 840000000 3' });
       return;
     }
     const jidAlvo = numeroAlvo.includes('@') ? numeroAlvo : `${numeroAlvo.replace(/\D/g, '')}@s.whatsapp.net`;
@@ -290,7 +282,6 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // --- !fila — mostra a ordem de recebimento definida pelo admin ---
   if (texto === '!fila') {
     const membros = await db.all(
       'SELECT nome, ordem, ultima_rodada_recebida FROM membros WHERE id_grupo = ? ORDER BY (ordem IS NULL), ordem ASC',
@@ -304,12 +295,11 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // --- !recebeu — admin confirma que alguém recebeu 
   if (texto.startsWith('!recebeu')) {
     if (!ehAdmin) return;
     const numeroAlvo = texto.split(' ').filter(Boolean)[1];
     if (!numeroAlvo) {
-      await sock.sendMessage(idConversa, { text: 'Uso correto: !recebeu 845490083' });
+      await sock.sendMessage(idConversa, { text: 'Uso correto: !recebeu 840000000' });
       return;
     }
     const jidAlvo = numeroAlvo.includes('@') ? numeroAlvo : `${numeroAlvo.replace(/\D/g, '')}@s.whatsapp.net`;
@@ -326,13 +316,11 @@ async function tratarMensagem(sock, db, msg) {
     [remetente, idConversa, nomeContato]
   );
 
-  //  !pendentes — lista pagamentos que não bateram com ninguém automaticamente 
-  // !banir — admin remove um membro manualmente 
   if (texto.startsWith('!banir')) {
     if (!ehAdmin) return;
     const numeroAlvo = texto.split(' ').filter(Boolean)[1];
     if (!numeroAlvo) {
-      await sock.sendMessage(idConversa, { text: 'Uso correto: !banir 84XXXXXXX' });
+      await sock.sendMessage(idConversa, { text: 'Uso correto: !banir 840000000' });
       return;
     }
     const jidAlvo = numeroAlvo.includes('@') ? numeroAlvo : `${numeroAlvo.replace(/\D/g, '')}@s.whatsapp.net`;
@@ -346,7 +334,6 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // --- !bloqueados — lista quem foi sinalizado por reciclar comprovativo ---
   if (texto === '!bloqueados') {
     if (!ehAdmin) return;
     const bloqueados = await db.all('SELECT * FROM membros_bloqueados WHERE id_grupo = ?', [idConversa]);
@@ -355,16 +342,14 @@ async function tratarMensagem(sock, db, msg) {
       return;
     }
     const linhas = bloqueados.map(b => `${b.nome} — ${b.motivo}`).join('\n');
-    await sock.sendMessage(idConversa, { text: `Sinalizados:\n${linhas}\n\nUsa !desbloquear 84XXXXXXX pra limpar depois de reveres.` });
+    await sock.sendMessage(idConversa, { text: `Sinalizados:\n${linhas}\n\nUsa !desbloquear840000000 pra limpar depois de reveres.` });
     return;
   }
-
-  //!desbloquear — tira alguém da lista de sinalizados, depois da Célia rever
   if (texto.startsWith('!desbloquear')) {
     if (!ehAdmin) return;
     const numeroAlvo = texto.split(' ').filter(Boolean)[1];
     if (!numeroAlvo) {
-      await sock.sendMessage(idConversa, { text: 'Uso correto: !desbloquear 84XXXXXXX' });
+      await sock.sendMessage(idConversa, { text: 'Uso correto: !desbloquear 840000000' });
       return;
     }
     const jidAlvo = numeroAlvo.includes('@') ? numeroAlvo : `${numeroAlvo.replace(/\D/g, '')}@s.whatsapp.net`;
@@ -373,7 +358,6 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  //  !cadastrar — admin regista um membro que ainda não escreveu no grupo 
   if (texto.startsWith('!cadastrar')) {
     if (!ehAdmin) return;
     const partes = texto.split(' ').filter(Boolean);
@@ -456,7 +440,6 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // --- !atribuir — admin liga manualmente um pagamento pendente a um membro ---
   if (texto.startsWith('!atribuir')) {
     if (!ehAdmin) return;
     const partes = texto.split(' ').filter(Boolean);
@@ -494,7 +477,6 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // --- Tenta interpretar como confirmação de pagamento ---
   const confirmacao = extrairDadosConfirmacao(texto);
   if (!confirmacao) {
     if (/\bMT\b|confirmad[oa]|transferist[e]s?|recebest[e]s?/i.test(texto)) {
@@ -504,7 +486,7 @@ async function tratarMensagem(sock, db, msg) {
         [idConversa, remetente, nomeContato, texto]
       );
       await sock.sendMessage(idConversa, {
-        text: `${nomeContato}, Recebi a tua mensagem mas não consegui reconhecer o formato do comprovativo. Confirma manualmente com a Célia por agora! Este caso vai ser reportado pra corrigirmos o reconhecimento automático.`
+        text: `${nomeContato}, recebi a tua mensagem mas não consegui reconhecer o formato do comprovativo. Confirma manualmente com a Célia por agora — este caso vai ser reportado pra corrigirmos o reconhecimento automático.`
       });
     }
     return;
@@ -517,8 +499,8 @@ async function tratarMensagem(sock, db, msg) {
       const jaRecebeuOPote = membroSuspeito?.ultima_rodada_recebida != null;
 
       if (jaRecebeuOPote) {
-        // Já recebeu o xitike remover estragaria e seria precipitado.
-        // Fica sinalizado pra o Admin decidir com calma.
+        // Já recebeu o pote — remover não desfaz nada, e pode ser precipitado.
+        // Fica sinalizado pra Célia decidir com calma.
         await db.run(
           `INSERT INTO membros_bloqueados (id_whatsapp, id_grupo, nome, motivo) VALUES (?, ?, ?, ?)
            ON CONFLICT(id_whatsapp, id_grupo) DO UPDATE SET motivo=excluded.motivo, criado_em=CURRENT_TIMESTAMP`,
@@ -544,9 +526,6 @@ async function tratarMensagem(sock, db, msg) {
     [confirmacao.id_transacao, idConversa, remetente, confirmacao.valor, texto]
   );
 
-  // "Recebeste" postado por um MEMBRO comum 
-  // Interpretamos isto como prova de ter recebido
- //só conta se o dinheiro veio de um número conhecido do Admin.
   if (confirmacao.tipo === 'recebido' && !ehAdmin) {
     const numeroOrigemNormalizado = normalizarNumero(confirmacao.remetente_numero);
     const veioDaCelia = NUMEROS_RECEBIMENTO_CELIA.length > 0 && NUMEROS_RECEBIMENTO_CELIA.includes(numeroOrigemNormalizado);
@@ -564,13 +543,11 @@ async function tratarMensagem(sock, db, msg) {
     return;
   }
 
-  // Cliente auto-reportando ("Transferiste ... para <destino>") 
+  
   if (confirmacao.tipo === 'enviado') {
     const webhookAtivo = !!process.env.WEBHOOK_TOKEN;
 
     if (webhookAtivo) {
-      // Modo seguro: só valida se a mesma transação já tiver chegado como
-      // SMS no celular do Admin (via Atalho). Sem isso, fica à espera.
       const smsReal = await db.get('SELECT * FROM sms_celia WHERE id_transacao = ? AND usado = 0', [confirmacao.id_transacao]);
 
       if (!smsReal) {
@@ -700,6 +677,7 @@ export async function iniciarWhatsApp() {
 
   await conectar();
 }
+
 
 export async function processarSmsExterna(texto) {
   const db = await getDb();

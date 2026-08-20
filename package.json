@@ -1,6 +1,6 @@
 {
   "name": "xitike",
-  "version": "0.2.0",
+  "version": "1.2.0",
   "type": "module",
   "description": "Bot de WhatsApp para gestão de xitiques de Cabelos e Iphones com confirmação automática de pagamentos M-Pesa/e-Mola.",
   "scripts": {

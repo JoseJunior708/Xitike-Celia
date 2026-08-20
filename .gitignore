@@ -1,6 +1,5 @@
 node_modules/
 .env
-auth_info/
 *.db
 public/logo.*
 public/tmp/

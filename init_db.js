@@ -108,7 +108,7 @@ async function inicializarBaseDados() {
       status TEXT DEFAULT 'CONFIRMADO'
     )
   `);
-  // Registo de auditoria de toda confirmação processada (evita duplicados).
+  // Registo de auditoria de toda confirmação processada (evita duplicados)
 
   console.log("Base de dados do Xitike criada/atualizada com sucesso!");
   await db.close();
